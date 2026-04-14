@@ -671,6 +671,13 @@ async function autoSkipTrace(leadList, bstKey) {
 // ROUTES
 // ════════════════════════════════════════════════════════════
 
+app.get("/", (req, res) => res.json({
+  name: "TLRE Lead Server", status: "ok", leads: leads.size,
+  endpoints: ["/health", "/api/leads", "/api/pdl/fetch", "/api/wake/delinquent",
+              "/api/wake/sales", "/api/nccourts/fetch", "/api/speedeon/fetch",
+              "/webhook/zapier?source=zillow"],
+}));
+
 app.get("/health", (req, res) => res.json({
   ok: true, leads: leads.size, uptime: Math.round(process.uptime()),
   keys: {
