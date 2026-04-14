@@ -108,7 +108,7 @@ AND job_start_date >= '${cutoffDate}'`;
   const payload = {
     sql,
     size,
-    dataset: "resume,contact,social",
+    dataset: "all",
   };
 
   const res = await fetch("https://api.peopledatalabs.com/v5/person/search", {
