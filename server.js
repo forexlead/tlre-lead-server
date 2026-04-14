@@ -305,7 +305,7 @@ async function fetchWakeRecentSales(filterZips = RTP_ZIPS) {
   console.log("[Wake] Fetching recent sales…");
   const res = await fetch(URL, {
     headers: { "User-Agent": "TLRE-LeadGen/1.0" },
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(60000),
   });
   if (!res.ok) throw new Error(`Wake recent sales HTTP ${res.status}`);
   const buf  = await res.arrayBuffer();
@@ -407,25 +407,13 @@ async function fetchWakeRecentSales(filterZips = RTP_ZIPS) {
 // RPA licensed access: contact NCAOC at nccourts.gov (~$500–2000/yr)
 // ════════════════════════════════════════════════════════════
 async function fetchNcEcourts(counties = ["Wake","Durham"], daysSince = 30) {
-  let totalFetched = 0, added = 0;
-
-  // NC eCourts Odyssey portal REST endpoints discovered from network inspection
-  // These are the internal API calls the portal browser app makes
-  for (const county of counties) {
-    for (const caseCategory of ["Domestic","Estate"]) {
-      try {
-        const cases = await searchOdysseyPortal(county, caseCategory, daysSince);
-        totalFetched += cases.length;
-        cases.forEach(c => { const l = odysseyToLead(c, county); if (l && save(l)) added++; });
-        await new Promise(r => setTimeout(r, 800));
-      } catch (err) {
-        console.warn(`[NCeCourts] ${county} ${caseCategory}: ${err.message}`);
-      }
-    }
-  }
-
-  console.log(`[NCeCourts] ${totalFetched} filings → ${added} new leads`);
-  return { fetched: totalFetched, added };
+  // NC eCourts (Tyler Technologies Odyssey) blocks automated server-side requests.
+  // Use the manual CSV import endpoint instead:
+  //   POST /api/nccourts/import  { cases: [...] }
+  // Or apply for the NC Remote Public Access (RPA) program at nccourts.gov
+  // for licensed bulk data access (~$500-2000/yr).
+  console.log("[NCeCourts] Portal blocks server requests — use /api/nccourts/import instead");
+  return { fetched: 0, added: 0, message: "NC eCourts requires manual import. See DEPLOY.md." };
 }
 
 async function searchOdysseyPortal(county, caseCategory, daysSince) {
