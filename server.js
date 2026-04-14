@@ -214,27 +214,49 @@ async function fetchWakeDelinquent() {
 
   if (!rows) throw new Error("Wake County delinquent file unavailable — try again tomorrow or on a weekday");
 
-  // The Tax Bill Layout defines columns — map common variants
+  // Log actual column names from first row so we can debug mapping
+  if (rows.length > 0) {
+    console.log(`[Wake] Columns: ${Object.keys(rows[0]).join(" | ")}`);
+  }
+
+  // Flexible column finder — tries exact, uppercase, lowercase, and partial match
   const col = (row, ...keys) => {
+    const rowKeys = Object.keys(row);
     for (const k of keys) {
-      const v = row[k] || row[k.toUpperCase()] || row[k.toLowerCase()] || "";
-      if (v !== "") return String(v).trim();
+      // exact
+      if (row[k] !== undefined && row[k] !== "") return String(row[k]).trim();
+      // uppercase
+      const ku = k.toUpperCase();
+      if (row[ku] !== undefined && row[ku] !== "") return String(row[ku]).trim();
+      // lowercase
+      const kl = k.toLowerCase();
+      if (row[kl] !== undefined && row[kl] !== "") return String(row[kl]).trim();
+      // partial match — find any column containing the key as substring
+      const match = rowKeys.find(rk => rk.toUpperCase().includes(k.toUpperCase()));
+      if (match && row[match] !== undefined && row[match] !== "") return String(row[match]).trim();
     }
     return "";
   };
 
   let added = 0;
   rows.forEach(row => {
-    const ownerName = col(row,"OWNER_NAME","Owner Name","OWNERNAME","owner");
+    // Try every possible owner name column variant
+    const ownerName = col(row,
+      "OWNER_NAME","Owner Name","OWNERNAME","owner","NAME","OWNER","TAXPAYER",
+      "ACCOUNT_NAME","AccountName","BILLING_NAME","BillingName","PROPERTY_OWNER"
+    );
     if (!ownerName || ownerName.length < 3) return;
 
-    const amtRaw  = col(row,"AMOUNT_DUE","Amount Due","AMTDUE","AMT_DUE","TAX_DUE");
-    const amount  = parseFloat(amtRaw.replace(/[^0-9.]/g,"")) || 0;
-    const taxYear = col(row,"TAX_YEAR","Tax Year","TAXYEAR","YEAR");
-    const propAddr= col(row,"PROPERTY_ADDR","Property Address","SITUS","LOCATION_ADDR","LOC_ADDR");
-    const city    = col(row,"CITY","PROP_CITY","City");
-    const zip     = col(row,"ZIP","ZIP_CODE","Zip");
-    const acct    = col(row,"ACCOUNT_NUM","Account","ACCT_NUM","REID");
+    const amtRaw  = col(row,"AMOUNT_DUE","Amount Due","AMTDUE","AMT_DUE","TAX_DUE",
+      "BALANCE","BAL_DUE","TOTAL_DUE","UNPAID","DELINQUENT_AMT","AMOUNT");
+    const amount  = parseFloat((amtRaw||"").replace(/[^0-9.]/g,"")) || 0;
+    const taxYear = col(row,"TAX_YEAR","Tax Year","TAXYEAR","YEAR","TAX_YR","BILL_YEAR");
+    const propAddr= col(row,"PROPERTY_ADDR","Property Address","SITUS","LOCATION_ADDR",
+      "LOC_ADDR","SITE_ADDRESS","SITUS_ADDRESS","PHYSICAL_ADDRESS","PROP_ADDR","ADDRESS");
+    const city    = col(row,"CITY","PROP_CITY","City","SITUS_CITY","SITE_CITY");
+    const zip     = col(row,"ZIP","ZIP_CODE","Zip","POSTAL","SITUS_ZIP","SITE_ZIP");
+    const acct    = col(row,"ACCOUNT_NUM","Account","ACCT_NUM","REID","ACCT","PARCEL_ID",
+      "ACCOUNT_NUMBER","BILL_NUM","BILL_NUMBER");
 
     const lead = {
       id:          nid("wak"),
@@ -289,12 +311,22 @@ async function fetchWakeRecentSales(filterZips = RTP_ZIPS) {
   const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
   const col = (row, ...keys) => {
+    const rowKeys = Object.keys(row);
     for (const k of keys) {
-      const v = row[k]||row[k.toUpperCase()]||row[k.toLowerCase()]||"";
-      if (v !== "") return String(v).trim();
+      if (row[k] !== undefined && row[k] !== "") return String(row[k]).trim();
+      const ku = k.toUpperCase();
+      if (row[ku] !== undefined && row[ku] !== "") return String(row[ku]).trim();
+      const kl = k.toLowerCase();
+      if (row[kl] !== undefined && row[kl] !== "") return String(row[kl]).trim();
+      const match = rowKeys.find(rk => rk.toUpperCase().includes(k.toUpperCase()));
+      if (match && row[match] !== undefined && row[match] !== "") return String(row[match]).trim();
     }
     return "";
   };
+
+  if (rows.length > 0) {
+    console.log(`[Wake Sales] Columns: ${Object.keys(rows[0]).join(" | ")}`);
+  }
 
   // Filter: only RTP zips, recent (< 90 days), non-arm's-length = potential distressed
   const cutoff = new Date();
