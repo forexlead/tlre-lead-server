@@ -87,27 +87,28 @@ const getKey = (req, k) =>
 async function fetchPdlLeads(apiKey, daysSince = 90, size = 25) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysSince);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  const sql = `SELECT * FROM person
+WHERE location_country = 'united states'
+AND location_metro IN (
+  'raleigh, north carolina',
+  'durham, north carolina',
+  'cary, north carolina',
+  'chapel hill, north carolina'
+)
+AND job_company_name IN (
+  'cisco', 'sas institute', 'apple', 'ibm', 'red hat', 'lenovo',
+  'barclays', 'gsk', 'bayer', 'rti international', 'wolfspeed',
+  'blue cross blue shield', 'duke university', 'unc health',
+  'nc state university', 'genesys', 'biogen', 'iqvia', 'fidelity'
+)
+AND job_start_date >= '${cutoffDate}'`;
 
   const payload = {
-    query: {
-      bool: {
-        must: [
-          { terms: { job_company_name: RTP_EMPLOYERS } },
-          { bool: {
-            should: [
-              { term: { location_metro: "durham, north carolina" } },
-              { term: { location_metro: "raleigh, north carolina" } },
-              { term: { location_metro: "cary, north carolina"   } },
-            ],
-            minimum_should_match: 1,
-          }},
-          { range: { job_start_date: { gte: cutoff.toISOString().slice(0,10) } } },
-        ],
-      },
-    },
+    sql,
     size,
-    required: "job_company_name AND location_metro",
-    dataset:  "resume,contact,social",
+    dataset: "resume,contact,social",
   };
 
   const res = await fetch("https://api.peopledatalabs.com/v5/person/search", {
