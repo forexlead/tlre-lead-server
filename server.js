@@ -292,6 +292,9 @@ async function fetchWakeDelinquent() {
   });
 
   console.log(`[Wake] Delinquent: ${rows.length} rows → ${added} new leads`);
+  if (added === 0 && rows.length > 0) {
+    console.log(`[Wake] First row sample: ${JSON.stringify(rows[0]).slice(0,400)}`);
+  }
   return { fetched: rows.length, added };
 }
 
@@ -343,34 +346,46 @@ async function fetchWakeRecentSales(filterZips = RTP_ZIPS) {
       if (saleDate < cutoff) return; // skip older than 90 days
     }
 
-    const owner    = col(row,"OWNER_NAME","Owner","GRANTEE","NEW_OWNER");
-    if (!owner) return;
-    const price    = parseFloat(col(row,"SALE_PRICE","Price","SALEPRICE","SALE_AMT").replace(/[^0-9.]/g,"")) || 0;
-    const addr     = col(row,"SITE_ADDR","Property Address","ADDRESS","LOCATION");
-    const city     = col(row,"CITY","PROP_CITY");
-    const acct     = col(row,"REID","ACCOUNT","ACCT");
+    // Build address from Wake County component columns
+    const streetNum  = col(row,"STREET_NUM");
+    const streetDir  = col(row,"DIRECTIONAL_PREFIX");
+    const streetName = col(row,"STREET_NAME");
+    const streetType = col(row,"STREET_TYPE");
+    const streetSfx  = col(row,"DIRECTIONAL_SUFFIX");
+    const streetMisc = col(row,"STREET_MISC");
+    const addr = [streetNum,streetDir,streetName,streetType,streetSfx,streetMisc].filter(Boolean).join(" ").trim();
+    if (!addr) return;
+
+    const price    = parseFloat((col(row,"SALE_PRICE")||"0").replace(/[^0-9.]/g,"")) || 0;
+    const assessed = parseFloat((col(row,"TOTAL_PROP_VALUE_ASSD","PARCEL_ASSD_VALUE_CURRENT")||"0").replace(/[^0-9.]/g,"")) || 0;
+    const city     = col(row,"CORP_LIMIT_DESC","PLANNING_JURISDICTION","TOWNSHIP_DESC");
+    const acct     = col(row,"REID");
+    const use      = col(row,"BLDG_USE_DESC","ZONING");
+    const yearBuilt= col(row,"YEAR_BUILT");
+    if (!acct) return;
 
     const lead = {
       id:          nid("wks"),
-      name:        tc(owner),
+      name:        `Property ${acct}`,
       email:       "", phone: "",
       source:      "wake_county",
       sourceLabel: "Wake County — Recent Sale",
       leadPhase:   "distressed_seller",
       type:        "seller",
       employer:    "",
-      budget:      price ? `Est. $${(price/1000).toFixed(0)}K` : "TBD",
-      area:        `${city||"Wake County"}, NC ${zip}`,
+      budget:      price ? `$${(price/1000).toFixed(0)}K sale` : "TBD",
+      area:        `${city||"Wake County"}, NC ${zip}`.trim(),
       propertyStreet: addr, propertyCity: city, propertyZip: zip,
       timeline:    "3–12 months",
       signals: [
-        "Recent property acquisition in RTP zone",
+        "Recent sale in RTP zip code",
         saleDateStr ? `Sale date: ${saleDateStr}` : null,
-        price ? `Sale price: $${price.toLocaleString()}` : null,
-        addr ? `Property: ${addr}` : null,
-        "New owner may be investor — potential future seller",
+        price       ? `Sale price: $${price.toLocaleString()}` : null,
+        addr        ? `Property: ${addr}` : null,
+        use         ? `Use: ${use}` : null,
+        yearBuilt   ? `Built: ${yearBuilt}` : null,
       ].filter(Boolean),
-      notes: `Recent sale via Wake County qualified sales file. REID: ${acct}. New owner may be an investor or corporate buyer — potential listing lead within 12 months.`,
+      notes: `Recent qualified sale. REID: ${acct}. ${addr}, ${city||""} NC ${zip}. Sale: $${price.toLocaleString()}. Assessed: $${assessed.toLocaleString()}.`,
       heatScore:   null, aiInsight: null,
       skipTraced:  false, skipTraceMatched: false,
       extId:       acct || null,
